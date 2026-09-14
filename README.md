@@ -9,9 +9,14 @@ measure it against, and a small experimental harness: running-time study with co
 intervals, correctness fuzzing, and approximation-quality sampling.
 
 Started as a Sabancı University CS301 (Algorithms) term project in 2019, rewritten in 2026
-as a proper library + CLI with tests and CI. The original 28-page report, including the
-NP-completeness proof (3-SAT → Vertex Cover) and experimental plots, is in
-[`docs/CS301_Vertex_Cover_Report.pdf`](docs/CS301_Vertex_Cover_Report.pdf).
+as a proper library + CLI with tests and CI.
+
+**[Read the report (PDF, 8 pages)](docs/report.pdf)** — NP-completeness proof by reduction from
+3-SAT, the 2-approximation proof, fresh experiments, and a postmortem of the bugs in the 2019 code.
+Source in [`docs/report.md`](docs/report.md); the original 2019 group report is kept in
+[`docs/legacy/`](docs/legacy/).
+
+![Greedy vs optimum on a star and on the Petersen graph](docs/figures/greedy-vs-optimum.png)
 
 ## The problem
 
@@ -47,8 +52,9 @@ ground truth for graphs up to ~24 vertices.
 include/vertex_cover/   public headers: Graph, greedyCover, exactCover, isVertexCover, summarize
 src/                    implementation + CLI (main.cpp)
 tests/                  dependency-free unit tests (ctest)
-benchmarks/results/     CSVs produced by `vertex_cover bench`
-docs/                   original 2019 project report
+examples/               edge-list graphs (Petersen, star) for `solve --file`
+benchmarks/             results/ CSVs from `vertex_cover bench`, plot.py renders them
+docs/                   report.md → report.pdf, figures/, legacy/ (2019 report)
 ```
 
 ## Build
@@ -72,14 +78,22 @@ ctest --test-dir build --output-on-failure
 # exact cover (7): 0 2 3 7 8 9 10
 # ratio: 1.42857
 
+# any graph from an edge list ("u v" per line, 0-based, # comments)
+./build/vertex_cover solve --file examples/petersen.txt --exact
+# graph: V=10 E=15
+# greedy cover (10): 0 1 2 3 4 9 5 7 6 8
+# exact cover (6): 1 3 4 5 6 7
+# ratio: 1.66667
+
 # fuzz: is greedy output always a valid cover?
 ./build/vertex_cover verify 10000 1000 10000 20000
 
 # approximation quality on small graphs (needs exact solver, V <= 20)
 ./build/vertex_cover quality 500
 
-# running-time study; writes two CSVs (E fixed / V fixed)
-./build/vertex_cover bench 1000 --out benchmarks/results
+# running-time study; writes two CSVs (E fixed / V fixed), then plot them
+./build/vertex_cover bench 50 --out benchmarks/results
+python benchmarks/plot.py
 ```
 
 All commands take `--seed <n>` (default 42) so runs are reproducible.
@@ -99,15 +113,20 @@ a valid cover every time. Also enforced by a ctest (`greedy_is_always_a_cover`).
 | 15 | 0.77 | 2.0 | 9 |
 | 20 | 0.78 | 2.0 | 2 |
 
+![quality](docs/figures/quality.png)
+
 Greedy typically lands 25–30 % above optimum, hits the theoretical worst case (ratio 2) at
 every size, and almost never finds the exact optimum once V > 10.
 
-**Running time.** With E fixed at 200 and V from 100 to 1000, and with V fixed at 200 and E
-from 200 to 4700, a single greedy run takes 1–10 µs. At that scale timer resolution and
-allocator noise dominate, so the CSVs in [`benchmarks/results/`](benchmarks/results/)
-(mean, standard deviation, standard error, 90 %/95 % confidence intervals per size) are
-best read as an upper bound rather than a clean linear fit. The 2019 report's plots, made
-with the same protocol on a slower machine, show the O(V + E) trend more clearly.
+**Running time.** 50 random graphs per size, warm-up run per graph, 95 % CI bands.
+
+| E fixed at 20,000 · V = 20k…200k | V fixed at 20,000 · E = 20k…1M |
+|---|---|
+| ![](docs/figures/time-edges-fixed.png) | ![](docs/figures/time-vertices-fixed.png) |
+
+Linear in V. Nearly flat in E: the inner loop stops at the first uncovered neighbour, and on
+dense random graphs almost every vertex is covered early, so O(V + E) is a worst-case bound
+that random inputs never approach. Discussion in the report, §5.3.
 
 ## What changed since 2019
 

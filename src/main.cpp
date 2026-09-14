@@ -1,5 +1,6 @@
 // vertex_cover CLI
 //   solve   <V> <E> [--seed S] [--exact]         greedy (and optionally exact) cover of one random graph
+//   solve   --file <edges.txt> [--exact]         same, on a graph read from an edge list ("u v" per line, 0-based)
 //   verify  <graphs> <Vmin> <Vmax> <Emax>        check greedy output is a valid cover on random graphs
 //   quality <trials>                             greedy vs exact ratio on small graphs (V = 5..20)
 //   bench   <iterations> [--out DIR]             O(V+E) running-time study, one CSV per configuration
@@ -9,6 +10,8 @@
 #include <fstream>
 #include <iostream>
 #include <random>
+#include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -22,6 +25,7 @@ int usage() {
     std::cerr <<
         "usage:\n"
         "  vertex_cover solve   <V> <E> [--seed S] [--exact]\n"
+        "  vertex_cover solve   --file <edges.txt> [--exact]\n"
         "  vertex_cover verify  <graphs> <Vmin> <Vmax> <Emax> [--seed S]\n"
         "  vertex_cover quality <trials> [--seed S]\n"
         "  vertex_cover bench   <iterations> [--out DIR] [--seed S]\n";
@@ -33,6 +37,7 @@ struct Args {
     unsigned seed = 42;
     bool exact = false;
     std::string out = ".";
+    std::string file;
 };
 
 Args parse(int argc, char** argv) {
@@ -41,6 +46,7 @@ Args parse(int argc, char** argv) {
         std::string s = argv[i];
         if (s == "--seed" && i + 1 < argc) a.seed = static_cast<unsigned>(std::stoul(argv[++i]));
         else if (s == "--out" && i + 1 < argc) a.out = argv[++i];
+        else if (s == "--file" && i + 1 < argc) a.file = argv[++i];
         else if (s == "--exact") a.exact = true;
         else a.positional.push_back(s);
     }
@@ -48,6 +54,10 @@ Args parse(int argc, char** argv) {
 }
 
 double timeGreedyMs(const vc::Graph& g) {
+    // One untimed warm-up run so page faults and cache misses from building the
+    // graph do not land inside the measured window.
+    volatile std::size_t warm = vc::greedyCover(g).size();
+    (void)warm;
     const auto t0 = std::chrono::steady_clock::now();
     volatile std::size_t sink = vc::greedyCover(g).size();
     (void)sink;
@@ -60,13 +70,40 @@ void writeRow(std::ostream& os, int size, const vc::Summary& s) {
        << s.ci90Low << ',' << s.ci90High << ',' << s.ci95Low << ',' << s.ci95High << '\n';
 }
 
+// Edge list: one "u v" pair per line, 0-based; '#' starts a comment. V = max vertex id + 1.
+vc::Graph readEdgeList(const std::string& path) {
+    std::ifstream in(path);
+    if (!in) throw std::runtime_error("cannot open " + path);
+    std::vector<vc::Edge> edges;
+    int maxV = -1;
+    std::string line;
+    while (std::getline(in, line)) {
+        const auto hash = line.find('#');
+        if (hash != std::string::npos) line.erase(hash);
+        std::istringstream ls(line);
+        int u, v;
+        if (!(ls >> u >> v)) continue;
+        if (u < 0 || v < 0) throw std::runtime_error("negative vertex id in " + path);
+        edges.emplace_back(u, v);
+        maxV = std::max({maxV, u, v});
+    }
+    vc::Graph g(maxV + 1);
+    for (auto [u, v] : edges) g.addEdge(u, v);
+    return g;
+}
+
 int cmdSolve(const Args& a) {
-    if (a.positional.size() != 2) return usage();
-    const int V = std::stoi(a.positional[0]), E = std::stoi(a.positional[1]);
-    std::mt19937 rng(a.seed);
-    const auto g = vc::Graph::random(V, E, rng);
+    vc::Graph g(0);
+    if (!a.file.empty()) {
+        if (!a.positional.empty()) return usage();
+        g = readEdgeList(a.file);
+    } else {
+        if (a.positional.size() != 2) return usage();
+        std::mt19937 rng(a.seed);
+        g = vc::Graph::random(std::stoi(a.positional[0]), std::stoi(a.positional[1]), rng);
+    }
     const auto greedy = vc::greedyCover(g);
-    std::cout << "graph: V=" << V << " E=" << g.edgeCount() << "\n";
+    std::cout << "graph: V=" << g.vertexCount() << " E=" << g.edgeCount() << "\n";
     std::cout << "greedy cover (" << greedy.size() << "):";
     for (int v : greedy) std::cout << ' ' << v;
     std::cout << "\nvalid: " << (vc::isVertexCover(g, greedy) ? "yes" : "no") << "\n";
@@ -126,21 +163,23 @@ int cmdBench(const Args& a) {
     std::mt19937 rng(a.seed);
     const char* header = "size,mean_ms,stddev,stderr,ci90_low,ci90_high,ci95_low,ci95_high\n";
 
-    {   // E fixed at 200, V = 100..1000
-        std::ofstream f(a.out + "/edges-fixed-200-" + std::to_string(iters) + "-iter.csv");
+    // Sizes are large enough that one greedy run takes milliseconds, so the
+    // measurement is not dominated by clock resolution.
+    {   // E fixed at 20,000; V = 20k .. 200k
+        std::ofstream f(a.out + "/edges-fixed-" + std::to_string(iters) + "-iter.csv");
         f << header;
-        for (int V = 100; V <= 1000; V += 100) {
+        for (int V = 20000; V <= 200000; V += 20000) {
             std::vector<double> t;
-            for (int i = 0; i < iters; ++i) t.push_back(timeGreedyMs(vc::Graph::random(V, 200, rng)));
+            for (int i = 0; i < iters; ++i) t.push_back(timeGreedyMs(vc::Graph::random(V, 20000, rng)));
             writeRow(f, V, vc::summarize(t));
         }
     }
-    {   // V fixed at 200, E = 200..4700
-        std::ofstream f(a.out + "/vertices-fixed-200-" + std::to_string(iters) + "-iter.csv");
+    {   // V fixed at 20,000; E = 20k .. 1M
+        std::ofstream f(a.out + "/vertices-fixed-" + std::to_string(iters) + "-iter.csv");
         f << header;
-        for (int E = 200; E <= 4700; E += 500) {
+        for (int E = 20000; E <= 1000000; E += 140000) {
             std::vector<double> t;
-            for (int i = 0; i < iters; ++i) t.push_back(timeGreedyMs(vc::Graph::random(200, E, rng)));
+            for (int i = 0; i < iters; ++i) t.push_back(timeGreedyMs(vc::Graph::random(20000, E, rng)));
             writeRow(f, E, vc::summarize(t));
         }
     }

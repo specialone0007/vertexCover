@@ -25,4 +25,7 @@ if(BUILD_TESTING)
   target_link_libraries(vc_tests PRIVATE vc)
   add_test(NAME unit COMMAND vc_tests)
   add_test(NAME greedy_is_always_a_cover COMMAND vertex_cover verify 200 50 400 3000)
+  add_test(NAME solve_from_edge_list
+           COMMAND vertex_cover solve --file ${CMAKE_SOURCE_DIR}/examples/petersen.txt --exact)
+  set_tests_properties(solve_from_edge_list PROPERTIES PASS_REGULAR_EXPRESSION "exact cover \\(6\\)")
 endif()

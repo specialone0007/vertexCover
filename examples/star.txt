@@ -1,0 +1,6 @@
+# Star K1,5: greedy takes 2 vertices, optimum is 1 (the centre)
+0 1
+0 2
+0 3
+0 4
+0 5
