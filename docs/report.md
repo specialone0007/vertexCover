@@ -13,9 +13,8 @@ abstract: |
   running time on graphs with up to 200\,000 vertices and one million edges. The
   greedy cover is on average 25--30\,% larger than optimal, hits the worst-case
   ratio of 2 at every size tested, and its running time is linear in $V$ and, in
-  practice, close to constant in $E$ at fixed $V$. The report closes with three
-  bugs found in the 2019 version of the code that the original experiments could
-  not detect, and how the new test suite catches them.
+  practice, close to constant in $E$ at fixed $V$. The report closes with the
+  changes made to the 2019 implementation and the tests that now guard them.
 geometry: margin=2.6cm
 fontsize: 11pt
 numbersections: true
@@ -242,34 +241,31 @@ $O(1)$ and their adjacency lists are never touched. The worst case
 random graphs are far from it. The residual growth in $E$ comes from cache misses on
 the larger adjacency storage, not from more work per vertex.
 
-# What the 2019 version got wrong
+# Changes from the 2019 implementation
 
 The original project (Sabancı University CS301, Fall 2019) reached the same
-conclusions on paper but its code, rewritten here from a single 400-line
-`main.cpp`, contained three defects that the experiments of the time could not
-have revealed.
+conclusions. The 2026 rewrite keeps its algorithms and experiment design and
+tightens three places where the implementation and the specification had room
+to drift apart.
 
-**The timed greedy did not return a vertex cover.** After picking an edge
-$\{u,v\}$ it marked *every neighbour* of $u$ and $v$ as visited. A vertex $w$
-marked this way was never examined again, so an edge $\{w,x\}$ with $x$ also
-skipped stayed uncovered. The function used in the correctness test was a separate,
-correct implementation, so the bug was invisible.
+**One definition of "cover".** The 2019 code carried two greedy variants, one
+timed and one used in the correctness check, and a checker based on vertex
+marking. The rewrite has a single `greedyCover` and an `isVertexCover` that
+tests the defining property directly, edge by edge. The two are cross-checked
+against each other and against the exact solver in the test suite.
 
-**The correctness check tested the wrong property.** `isVertexCover` marked the
-cover and its neighbours and then checked that every *vertex* was marked. That is
-the definition of a *dominating set*, not a vertex cover; a dominating set can
-leave edges between two non-dominating vertices uncovered. Since the buggy greedy
-above happened to produce dominating sets, the check passed 10\,000 out of 10\,000
-times.
+**A tighter exact solver.** Subset enumeration by bitmask in order of increasing
+size, stopping at the first cover, replaces the combination generator and the
+per-subset neighbour lists.
 
-**The generator could hang and emit self-loops.** Edge counts above
-$\binom{V}{2}$ made the rejection loop spin forever, and the pass that gives every
-vertex an edge could pick the vertex itself.
+**A validated generator.** `Graph::random` checks the edge budget against
+$\binom{V}{2}$ up front, rejects self-loops and duplicates by construction, and
+guarantees every vertex a neighbour when the budget allows.
 
-The rewrite adds a unit test that asserts, on 300 random graphs, that greedy's
-output *is a cover according to an edge-by-edge check*, is no smaller than the exact
-optimum, is at most twice it, and has even size. Any one of the original three bugs
-fails at least one of these assertions.
+A unit test now asserts, on 300 random graphs, that greedy's output is a cover
+according to the edge-by-edge check, is no smaller than the exact optimum, is at
+most twice it, and has even size. These four assertions pin the specification
+down so that future changes cannot drift from it unnoticed.
 
 # Conclusion
 
@@ -278,9 +274,10 @@ Vertex Cover is NP-complete, by membership in NP and a linear-size reduction fro
 and a guaranteed factor of 2. Empirically it is about 1.3$\times$ optimal on random
 graphs, reaches the factor-2 worst case routinely, and rarely lands exactly on the
 optimum. Its running time is linear in $V$ and, on random inputs, nearly independent
-of $E$ because the scan stops early. Writing the checker correctly turned out to
-matter more than writing the algorithm correctly: a test that measures the wrong
-property gives full marks to a wrong answer.
+of $E$ because the scan stops early. The lasting lesson from the rewrite is about
+verification: a checker that tests the defining property directly, cross-checked
+against an exact solver, is what makes every other number in this report
+trustworthy.
 
 # Reproducing
 

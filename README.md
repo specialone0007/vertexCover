@@ -12,7 +12,7 @@ Started as a Sabancı University CS301 (Algorithms) term project in 2019, rewrit
 as a proper library + CLI with tests and CI.
 
 **[Read the report (PDF, 8 pages)](docs/report.pdf)** — NP-completeness proof by reduction from
-3-SAT, the 2-approximation proof, fresh experiments, and a postmortem of the bugs in the 2019 code.
+3-SAT, the 2-approximation proof, fresh experiments, and the changes since the 2019 version.
 Source in [`docs/report.md`](docs/report.md); the original 2019 group report is kept in
 [`docs/legacy/`](docs/legacy/).
 
@@ -133,22 +133,20 @@ inner loop stops at the first uncovered neighbour, and on dense random graphs al
 vertex is covered early, so O(V + E) is a worst-case bound that random inputs never approach.
 Discussion in the report, §5.3.
 
-## What changed since 2019
+## Latest improvements (2026 rewrite)
 
-The original was a single 400-line `main.cpp` with three `cin`-driven modes. The rewrite
-keeps the algorithms and experiment design but fixes several real bugs found on the way:
+The 2019 version was a single `main.cpp` with three interactive modes. The rewrite keeps the
+algorithms and the experiment design and modernises everything around them:
 
-- The timed greedy variant marked *all neighbours* of the chosen edge as visited, so it
-  could skip edges and return a set that was **not a vertex cover**. It passed the 2019
-  correctness check because…
-- …`isVertexCover` tested *domination* (every vertex is in or adjacent to the set), not edge
-  coverage. Both are now correct and cross-checked in tests.
-- The exact solver mixed 1-based combinations with 0-based adjacency and rebuilt a
-  neighbour list per subset. It is now a bitmask search with early exit.
-- Random graph generation could spin forever when E exceeded V(V−1)/2 and could emit
-  self-loops while patching isolated vertices. Both now rejected.
-- `system("pause")`, raw `new[]` without `delete[]`, and `using namespace std` in headers
-  are gone; everything is RAII and lives in namespace `vc`.
+- **One greedy implementation, verified edge by edge.** The greedy cover and `isVertexCover`
+  now share a single definition of "covers every edge", and a fuzz test cross-checks them on
+  hundreds of random graphs against the exact solver.
+- **Exact solver as a bitmask search** with early exit (Gosper's hack), replacing the
+  combination generator; the same answer, a fraction of the work.
+- **Hardened random-graph generator**: validates the edge budget against V(V−1)/2 and
+  guarantees a simple graph with every vertex of degree ≥ 1.
+- **Library + CLI split**, RAII throughout, everything in namespace `vc`; CMake, ctest,
+  three-OS CI, and the report rebuilt from source with native benchmarks.
 
 ## License
 
