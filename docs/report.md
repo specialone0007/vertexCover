@@ -170,7 +170,11 @@ $V \le 20$.
 # Experiments
 
 All numbers below are reproducible with the commands shown, seed 42, on the
-implementation in this repository (GCC 13, `-O3`, Linux container on a desktop CPU).
+implementation in this repository. Timings were taken natively on Windows 11 with
+Clang 20 (via `zig c++`) at `-O3`, on an Intel Tiger Lake laptop CPU. Note that
+`std::uniform_int_distribution` is not specified bit-for-bit by the standard, so the
+*particular* random graphs, and therefore the exact vertices printed by `solve`,
+differ between libstdc++, libc++ and MSVC; the statistics do not.
 
 ## Validity
 
@@ -191,16 +195,16 @@ $V \in \{5,\dots,20\}$ we draw 500 graphs with $E \sim U[V-1,\ \binom{V}{2}]$.
 
 | $V$ | mean $q$ | worst ratio $|C|/|\mathrm{OPT}|$ | greedy $=$ OPT |
 |----:|---------:|---------------------------------:|---------------:|
-|  5 | 0.738 | 2.0 | 81 / 500 |
-|  6 | 0.678 | 2.0 | 39 / 500 |
-|  7 | 0.734 | 2.0 | 49 / 500 |
-|  8 | 0.699 | 2.0 | 16 / 500 |
-|  9 | 0.730 | 2.0 | 19 / 500 |
-| 10 | 0.723 | 2.0 | 14 / 500 |
-| 12 | 0.740 | 2.0 |  9 / 500 |
-| 15 | 0.775 | 2.0 |  9 / 500 |
-| 18 | 0.765 | 2.0 |  0 / 500 |
-| 20 | 0.782 | 2.0 |  2 / 500 |
+|  5 | 0.736 | 2.0 | 96 / 500 |
+|  6 | 0.674 | 2.0 | 51 / 500 |
+|  7 | 0.738 | 2.0 | 49 / 500 |
+|  8 | 0.704 | 2.0 | 25 / 500 |
+|  9 | 0.743 | 2.0 | 18 / 500 |
+| 10 | 0.715 | 2.0 |  6 / 500 |
+| 12 | 0.728 | 2.0 |  5 / 500 |
+| 15 | 0.777 | 2.0 |  9 / 500 |
+| 18 | 0.769 | 2.0 |  1 / 500 |
+| 20 | 0.786 | 2.0 |  1 / 500 |
 
 Table: `vertex_cover quality 500`. Quality is the mean over 500 graphs per size.
 
@@ -210,7 +214,7 @@ Three observations. First, the mean quality sits at 0.70--0.78, i.e. the greedy 
 is typically 25--30\,% larger than optimal, well inside the factor-2 guarantee.
 Second, the worst case *is* reached at every size: random sparse graphs regularly
 contain star-like pieces where greedy spends two vertices on one. Third, the chance
-of hitting the exact optimum collapses as $V$ grows, from 16\,% at $V=5$ to under
+of hitting the exact optimum collapses as $V$ grows, from 19\,% at $V=5$ to under
 1\,% at $V \ge 18$. Greedy is a good bound, not a good exact heuristic.
 
 ## Running time
@@ -223,20 +227,20 @@ with an untimed warm-up run per graph; the band is the 95\,% confidence interval
 ![Running time. Left: $E$ fixed at 20\,000, $V$ from 20\,000 to 200\,000. Right: $V$ fixed at 20\,000, $E$ from 20\,000 to 1\,000\,000.](figures/time-edges-fixed.png){width=49%}
 ![](figures/time-vertices-fixed.png){width=49%}
 
-With $E$ fixed, time grows roughly linearly with $V$ up to about 140\,000 vertices
-and then flattens into noise; the graph is so sparse there that most vertices have
-degree one and the run is dominated by the sequential scan of `inCover`, which is
-memory-bound. With $V$ fixed, time stays within 2--5\,ms while $E$ grows fifty-fold.
-That is not a contradiction of $O(V+E)$: the bound is an upper bound on adjacency
-entries *examined*, and the inner loop stops at the first uncovered neighbour. In a
-dense random graph almost every vertex is covered within the first few hundred
-outer iterations, after which the remaining vertices are skipped in $O(1)$. The
-worst case ($\Theta(V+E)$) needs adversarial inputs such as long paths with
-pendant vertices; random graphs are far from it.
+With $E$ fixed, time grows linearly with $V$: from 0.25\,ms at 20\,000 vertices to
+0.90\,ms at 200\,000, with tight confidence bands. The slope is set by the
+sequential pass over `inCover` and the (mostly empty) adjacency lists, i.e. the $V$
+term of the bound.
 
-Timing in a container on a desktop OS is noisy (the confidence bands are wide even
-at 50 samples). The direction of the results is robust; the individual means are not
-to be quoted to more than one significant figure.
+With $V$ fixed, time grows only from 0.22\,ms to 0.45\,ms while $E$ grows fifty-fold,
+from 20\,000 to one million. That is not a contradiction of $O(V+E)$: the bound
+counts adjacency entries *examined*, and the inner loop stops at the first uncovered
+neighbour. In a dense random graph almost every vertex is covered within the first
+few hundred outer iterations, after which the remaining vertices are skipped in
+$O(1)$ and their adjacency lists are never touched. The worst case
+($\Theta(V+E)$) needs adversarial inputs such as long paths with pendant vertices;
+random graphs are far from it. The residual growth in $E$ comes from cache misses on
+the larger adjacency storage, not from more work per vertex.
 
 # What the 2019 version got wrong
 

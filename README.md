@@ -96,7 +96,10 @@ ctest --test-dir build --output-on-failure
 python benchmarks/plot.py
 ```
 
-All commands take `--seed <n>` (default 42) so runs are reproducible.
+All commands take `--seed <n>` (default 42) so runs are reproducible on one platform. The exact
+random graphs differ between libstdc++, libc++ and MSVC (`std::uniform_int_distribution` is not
+pinned by the standard), so the vertex lists above may differ on your machine; the statistics
+and the Petersen/star outputs do not.
 
 ## Results
 
@@ -107,26 +110,28 @@ a valid cover every time. Also enforced by a ctest (`greedy_is_always_a_cover`).
 
 | V  | mean quality | worst ratio | exact hits / 500 |
 |----|--------------|-------------|------------------|
-| 5  | 0.74 | 2.0 | 81 |
-| 8  | 0.70 | 2.0 | 16 |
-| 10 | 0.72 | 2.0 | 14 |
-| 15 | 0.77 | 2.0 | 9 |
-| 20 | 0.78 | 2.0 | 2 |
+| 5  | 0.74 | 2.0 | 96 |
+| 8  | 0.70 | 2.0 | 25 |
+| 10 | 0.72 | 2.0 | 6 |
+| 15 | 0.78 | 2.0 | 9 |
+| 20 | 0.79 | 2.0 | 1 |
 
 ![quality](docs/figures/quality.png)
 
 Greedy typically lands 25–30 % above optimum, hits the theoretical worst case (ratio 2) at
 every size, and almost never finds the exact optimum once V > 10.
 
-**Running time.** 50 random graphs per size, warm-up run per graph, 95 % CI bands.
+**Running time.** 50 random graphs per size, warm-up run per graph, 95 % CI bands. Native
+Windows 11, Clang 20 `-O3`, Intel Tiger Lake laptop.
 
 | E fixed at 20,000 · V = 20k…200k | V fixed at 20,000 · E = 20k…1M |
 |---|---|
 | ![](docs/figures/time-edges-fixed.png) | ![](docs/figures/time-vertices-fixed.png) |
 
-Linear in V. Nearly flat in E: the inner loop stops at the first uncovered neighbour, and on
-dense random graphs almost every vertex is covered early, so O(V + E) is a worst-case bound
-that random inputs never approach. Discussion in the report, §5.3.
+Linear in V (0.25 ms → 0.90 ms). Nearly flat in E (0.22 ms → 0.45 ms over a 50× range): the
+inner loop stops at the first uncovered neighbour, and on dense random graphs almost every
+vertex is covered early, so O(V + E) is a worst-case bound that random inputs never approach.
+Discussion in the report, §5.3.
 
 ## What changed since 2019
 
