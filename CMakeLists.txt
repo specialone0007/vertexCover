@@ -1,0 +1,28 @@
+cmake_minimum_required(VERSION 3.16)
+project(vertex_cover LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
+add_library(vc STATIC src/graph.cpp src/algorithms.cpp src/stats.cpp)
+target_include_directories(vc PUBLIC include)
+if(MSVC)
+  target_compile_options(vc PRIVATE /W4 /permissive-)
+else()
+  target_compile_options(vc PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+add_executable(vertex_cover src/main.cpp)
+target_link_libraries(vertex_cover PRIVATE vc)
+
+include(CTest)
+if(BUILD_TESTING)
+  add_executable(vc_tests tests/test_vertex_cover.cpp)
+  target_link_libraries(vc_tests PRIVATE vc)
+  add_test(NAME unit COMMAND vc_tests)
+  add_test(NAME greedy_is_always_a_cover COMMAND vertex_cover verify 200 50 400 3000)
+endif()
