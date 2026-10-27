@@ -184,7 +184,7 @@ valid covers: 10000/10000
 
 10\,000 random graphs, $V \sim U[1000, 10000]$, $E \sim U[V, 20000]$, every vertex of
 degree $\ge 1$. Every output passed `isVertexCover`, which checks each edge
-directly. The same property is enforced as a `ctest` (200 graphs) on every push.
+directly. The same property is enforced as a `ctest` (200 graphs) on every push to main.
 
 ## Approximation quality
 
